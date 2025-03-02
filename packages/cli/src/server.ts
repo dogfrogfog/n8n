@@ -1,10 +1,10 @@
+import { Container, Service } from '@n8n/di';
 import cookieParser from 'cookie-parser';
 import express from 'express';
 import { access as fsAccess } from 'fs/promises';
 import helmet from 'helmet';
 import { InstanceSettings } from 'n8n-core';
 import { resolve } from 'path';
-import { Container, Service } from 'typedi';
 
 import { AbstractServer } from '@/abstract-server';
 import config from '@/config';
@@ -37,7 +37,6 @@ import '@/controllers/active-workflows.controller';
 import '@/controllers/annotation-tags.controller.ee';
 import '@/controllers/auth.controller';
 import '@/controllers/binary-data.controller';
-import '@/controllers/curl.controller';
 import '@/controllers/ai.controller';
 import '@/controllers/dynamic-node-parameters.controller';
 import '@/controllers/invitation.controller';
@@ -52,6 +51,7 @@ import '@/controllers/project.controller';
 import '@/controllers/role.controller';
 import '@/controllers/tags.controller';
 import '@/controllers/translation.controller';
+import '@/controllers/folder.controller';
 import '@/controllers/users.controller';
 import '@/controllers/user-settings.controller';
 import '@/controllers/workflow-statistics.controller';
@@ -133,6 +133,10 @@ export class Server extends AbstractServer {
 
 		if (!this.globalConfig.endpoints.disableUi) {
 			await import('@/controllers/cta.controller');
+		}
+
+		if (!this.globalConfig.tags.disabled) {
+			await import('@/controllers/tags.controller');
 		}
 
 		// ----------------------------------------
@@ -319,8 +323,27 @@ export class Server extends AbstractServer {
 				res.sendStatus(404);
 			};
 
+			const serveSchemas: express.RequestHandler = async (req, res) => {
+				const { node, version, resource, operation } = req.params;
+				const filePath = this.loadNodesAndCredentials.resolveSchema({
+					node,
+					resource,
+					operation,
+					version,
+				});
+
+				if (filePath) {
+					try {
+						await fsAccess(filePath);
+						return res.sendFile(filePath, cacheOptions);
+					} catch {}
+				}
+				res.sendStatus(404);
+			};
+
 			this.app.use('/icons/@:scope/:packageName/*/*.(svg|png)', serveIcons);
 			this.app.use('/icons/:packageName/*/*.(svg|png)', serveIcons);
+			this.app.use('/schemas/:node/:version/:resource?/:operation?.json', serveSchemas);
 
 			const isTLSEnabled =
 				this.globalConfig.protocol === 'https' && !!(this.sslKey && this.sslCert);
@@ -369,11 +392,12 @@ export class Server extends AbstractServer {
 					method === 'GET' &&
 					accept &&
 					(accept.includes('text/html') || accept.includes('*/*')) &&
+					!req.path.endsWith('.wasm') &&
 					!nonUIRoutesRegex.test(req.path)
 				) {
-					res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+					res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate');
 					securityHeadersMiddleware(req, res, () => {
-						res.sendFile('index.html', { root: staticCacheDir, maxAge, lastModified: true });
+						res.sendFile('index.html', { root: staticCacheDir, maxAge: 0, lastModified: false });
 					});
 				} else {
 					next();

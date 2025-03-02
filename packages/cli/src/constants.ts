@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import type { n8n } from 'n8n-core';
-import { jsonParse } from 'n8n-workflow';
+import type { ITaskDataConnections } from 'n8n-workflow';
+import { jsonParse, TRIMMED_TASK_DATA_CONNECTIONS_KEY } from 'n8n-workflow';
 import { resolve, join, dirname } from 'path';
 
 const { NODE_ENV, E2E_TESTS } = process.env;
@@ -103,6 +104,7 @@ export const LICENSE_QUOTAS = {
 	WORKFLOW_HISTORY_PRUNE_LIMIT: 'quota:workflowHistoryPrune',
 	TEAM_PROJECT_LIMIT: 'quota:maxTeamProjects',
 	AI_CREDITS: 'quota:aiCredits',
+	API_KEYS_PER_USER_LIMIT: 'quota:apiKeysPerUserLimit',
 } as const;
 export const UNLIMITED_LICENSE_QUOTA = -1;
 
@@ -161,6 +163,22 @@ export const ARTIFICIAL_TASK_DATA = {
 	],
 };
 
+/**
+ * Connections for an item standing in for a manual execution data item too
+ * large to be sent live via pubsub. This signals to the client to direct the
+ * user to the execution history.
+ */
+export const TRIMMED_TASK_DATA_CONNECTIONS: ITaskDataConnections = {
+	main: [
+		[
+			{
+				json: { [TRIMMED_TASK_DATA_CONNECTIONS_KEY]: true },
+				pairedItem: undefined,
+			},
+		],
+	],
+};
+
 /** Lowest priority, meaning shut down happens after other groups */
 export const LOWEST_SHUTDOWN_PRIORITY = 0;
 export const DEFAULT_SHUTDOWN_PRIORITY = 100;
@@ -178,4 +196,3 @@ export const WsStatusCodes = {
 } as const;
 
 export const FREE_AI_CREDITS_CREDENTIAL_NAME = 'n8n free OpenAI API credits';
-export const OPEN_AI_API_CREDENTIAL_TYPE = 'openAiApi';
